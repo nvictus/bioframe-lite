@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-from scipy.sparse import coo_array, csr_array
-from scipy.sparse.csgraph import connected_components
 
 from bioframe_lite._join import JoinOperator
 from bioframe_lite import _ops
@@ -55,7 +53,7 @@ def cluster(df, by=None, within=0, closed=True):
     for key in group_keys:
         inds = groups.get(key, np.array([]))
         if len(inds) > 0:
-            ids, n = ops.cluster(starts[inds], ends[inds] + within, closed)
+            ids, n = _ops.cluster(starts[inds], ends[inds] + within, closed)
             indices.append(inds)
             labels.append(n_clusters + ids)
             n_clusters += n
