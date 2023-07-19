@@ -1,7 +1,7 @@
 """
 Generic interval join operator.
 """
-from typing import Any, Callable, Union, Optional
+from typing import Any, Callable, Tuple, Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -82,8 +82,8 @@ class JoinOperator:
     cluster intervals satisfying arbitrary join criteria by finding connected
     components in the join graph.
     """
-    op: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]]
-    op_self: Optional[Callable[[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]]]
+    op: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]
+    op_self: Optional[Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]]
 
     def __init__(self, op, op_self=None):
         self.op = op

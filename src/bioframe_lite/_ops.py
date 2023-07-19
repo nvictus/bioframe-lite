@@ -1,7 +1,7 @@
 """
 Core interval join operations on arrays of interval coordinates.
 """
-from typing import Any, Union, Optional
+from typing import Any, Tuple, Union, Optional
 
 import numpy as np
 
@@ -67,7 +67,7 @@ def _overlap_right(
     starts2: np.ndarray,
     strict: bool = False,
     closed: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Given two ordered sets of intervals, both sorted by (start, end), find all
     overlaps between intervals in set1 with downstream intervals in set2.
@@ -123,7 +123,7 @@ def overlap_self(
     starts: np.ndarray,
     ends: np.ndarray,
     closed: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Return indices of pairs of overlapping intervals within a set.
 
@@ -183,7 +183,7 @@ def overlap(
     ends2: np.ndarray,
     closed: bool = False,
     sort: bool = True,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Return indices of pairs of overlapping intervals between two sets.
 
@@ -287,7 +287,7 @@ def _closest_nooverlap_left(
     ends2: np.ndarray,
     k: int = 1,
     tie_arr: np.ndarray = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     n1 = starts1.shape[0]
 
     if tie_arr is None:
@@ -311,7 +311,7 @@ def _closest_nooverlap_right(
     ends2: np.ndarray,
     k: int = 1,
     tie_arr: np.ndarray = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     n1 = starts1.shape[0]
     n2 = starts2.shape[0]
 
@@ -335,7 +335,7 @@ def _prune_closest(
     dists: np.ndarray,
     k: int,
     tie_arr: np.ndarray = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # Sort by distance to set 1 intervals and, if present, by the tie-breaking
     # data array.
     if tie_arr is None:
@@ -364,7 +364,7 @@ def closest_nooverlap_self(
     k: int = 1,
     direction: Literal["left", "right"] = None,
     tie_arr: np.ndarray = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     For every interval in a set, return the indices of k closest intervals
     in the same set.
@@ -410,7 +410,7 @@ def closest_nooverlap(
     k: int = 1,
     direction: Literal["left", "right"] = None,
     tie_arr: np.ndarray = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     For every interval in set 1, return the indices of k closest intervals
     from set 2.
