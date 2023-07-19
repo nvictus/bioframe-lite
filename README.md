@@ -26,3 +26,5 @@
 [rtd-link]:                 https://bioframe-lite.readthedocs.io/en/latest/?badge=latest
 
 <!-- prettier-ignore-end -->
+
+Experimental repo for the bioframe join API.
