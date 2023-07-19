@@ -1,9 +1,11 @@
 """
 Core interval join operations on arrays of interval coordinates.
 """
-from typing import Any, Literal, Union, Optional
+from typing import Any, Union, Optional
 
 import numpy as np
+
+from bioframe_lite._compat.typing import Literal
 
 
 def aranges_flat(

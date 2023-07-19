@@ -1,7 +1,7 @@
 """
 Generic interval join operator.
 """
-from typing import Any, Callable, Literal, Union, Optional
+from typing import Any, Callable, Union, Optional
 
 import numpy as np
 import pandas as pd
