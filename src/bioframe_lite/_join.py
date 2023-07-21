@@ -5,7 +5,8 @@ from typing import Any, Callable, Tuple, Union, Optional
 
 import numpy as np
 import pandas as pd
-from scipy.sparse.csgraph import coo_array, csr_array, connected_components
+from scipy.sparse import coo_array, csr_array
+from scipy.sparse.csgraph import connected_components
 
 
 def join_graph_biadj(
@@ -68,6 +69,20 @@ def join_graph_adj(
     ).tocsr()
 
 
+def _minus(inds1, inds2, n1, n2, how):
+    if how in {"left", "outer"} and n1 > 0:
+        inds1_unpaired = np.setdiff1d(np.arange(n1), inds1)
+    else:
+        inds1_unpaired = np.array([], dtype=int)
+
+    if how in {"right", "outer"} and n2 > 0:
+        inds2_unpaired = np.setdiff1d(np.arange(n2), inds2)
+    else:
+        inds2_unpaired = np.array([], dtype=int)
+
+    return inds1_unpaired, inds2_unpaired
+
+
 class JoinOperator:
     """
     A generic join operator that can be used to expose a variety of join
@@ -82,108 +97,11 @@ class JoinOperator:
     cluster intervals satisfying arbitrary join criteria by finding connected
     components in the join graph.
     """
-    op: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]
-    op_self: Optional[Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]]
+    def join(self, how="inner", suffixes=("", "_")):
 
-    def __init__(self, op, op_self=None):
-        self.op = op
-        self.op_self = op_self
-
-    def inner(self, df1, df2, by=None, **kwargs):
-        starts1 = df1["start"].to_numpy()
-        ends1 = df1["end"].to_numpy()
-        starts2 = df2["start"].to_numpy()
-        ends2 = df2["end"].to_numpy()
-
-        keys1 = ["chrom"]
-        keys2 = ["chrom"]
-        if by is not None:
-            if isinstance(by, str):
-                by = [by]
-            keys1 += by
-            keys2 += by
-        df1_groups = df1.groupby(keys1, observed=True, dropna=False, sort=False).indices
-        df2_groups = df2.groupby(keys2, observed=True, dropna=False, sort=False).indices
-
-        events1 = []
-        events2 = []
-        group_keys = set.union(set(df1_groups.keys()), set(df2_groups.keys()))
-        for key in group_keys:
-            df1_inds = df1_groups.get(key, np.array([]))
-            df2_inds = df2_groups.get(key, np.array([]))
-
-            if len(df1_inds) > 0 and len(df2_inds) > 0:
-                ev1, ev2, *_ = self.op(
-                    starts1[df1_inds],
-                    ends1[df1_inds],
-                    starts2[df2_inds],
-                    ends2[df2_inds],
-                    **kwargs
-                )
-                events1.append(df1_inds[ev1])
-                events2.append(df2_inds[ev2])
-
-        events1 = np.concatenate(events1)
-        events2 = np.concatenate(events2)
-
-        return events1, events2
-
-    def inner_self(self, df, by=None, **kwargs):
-        if self.op_self is None:
-            raise ValueError("Self-join not supported for this operation.")
-
-        starts = df["start"].to_numpy()
-        ends = df["end"].to_numpy()
-
-        keys = ["chrom"]
-        if by is not None:
-            if isinstance(by, str):
-                by = [by]
-            keys += by
-        groups = df.groupby(keys, observed=True, dropna=False, sort=False).indices
-
-        events1 = []
-        events2 = []
-        group_keys = set(groups.keys())
-        for key in group_keys:
-            inds = groups.get(key, np.array([]))
-
-            if len(inds) > 0:
-                ev1, ev2, *_ = self.op_self(
-                    starts[inds],
-                    ends[inds],
-                    **kwargs
-                )
-                events1.append(inds[ev1])
-                events2.append(inds[ev2])
-
-        events1 = np.concatenate(events1)
-        events2 = np.concatenate(events2)
-
-        return events1, events2
-
-    def _minus(self, inds1, inds2, n1, n2, how="left"):
-        if how in {"left", "outer"} and n1 > 0:
-            inds1_unpaired = np.setdiff1d(np.arange(n1), inds1)
-        else:
-            inds1_unpaired = np.array([], dtype=int)
-
-        if how in {"right", "outer"} and n2 > 0:
-            inds2_unpaired = np.setdiff1d(np.arange(n2), inds2)
-        else:
-            inds2_unpaired = np.array([], dtype=int)
-
-        return inds1_unpaired, inds2_unpaired
-
-    def join(self, df1, df2=None, by=None, how="inner", suffixes=("", "_"), **kwargs):
-
-        if df2 is None:
-            df2 = df1
-            i, j, *_ = self.inner_self(df1, by=by, **kwargs)
-        else:
-            i, j, *_ = self.inner(df1, df2, by=by, **kwargs)
-
-        oi, oj = self._minus(i, j, df1.shape[0], df2.shape[0], how=how)
+        df1, df2 = self._tables()
+        i, j, *_ = self._inner()
+        oi, oj = _minus(i, j, df1.shape[0], df2.shape[0], how=how)
 
         result = [
             pd.concat([
@@ -214,14 +132,11 @@ class JoinOperator:
             ignore_index=True
         ).convert_dtypes()
 
-    def diff(self, df1, df2, by=None, how="left", suffixes=("", "_"), **kwargs):
+    def diff(self, how="left", suffixes=("", "_")):
 
-        if df2 is None:
-            i, j = self.inner_self(df1, by=by, **kwargs)
-        else:
-            i, j = self.inner(df1, df2, by=by, **kwargs)
-
-        oi, oj = self._minus(i, j, df1.shape[0], df2.shape[0], how=how)
+        df1, df2 = self._tables()
+        i, j, *_ = self._inner()
+        oi, oj = _minus(i, j, df1.shape[0], df2.shape[0], how=how)
 
         result = []
 
@@ -247,20 +162,111 @@ class JoinOperator:
             ignore_index=True
         ).convert_dtypes()
 
-    def graph(self, df1, df2=None, by=None, kind="biadj", **kwargs):
-        if df2 is None:
-            df2 = df1
-            i, j = self.inner_self(df1, by=by, **kwargs)
-        else:
-            i, j = self.inner(df1, df2, by=by, **kwargs)
+    def graph(self, kind="biadj"):
+        i, j, *_ = self.inner(**self.kwargs)
 
         if kind == "biadj":
-            return join_graph_biadj(i, j, df1.shape[0], df2.shape[0])
+            return join_graph_biadj(i, j, self.df1.shape[0], self.df2.shape[0])
         elif kind == "adj":
-            return join_graph_adj(i, j, df1.shape[0], df2.shape[0])
+            return join_graph_adj(i, j, self.df1.shape[0], self.df2.shape[0])
         else:
             raise ValueError(f"Unrecognized kind: {kind}")
 
-    def cluster(self, df, by=None, **kwargs):
-        mat = self.graph(df, by=by, **kwargs)
+    def cluster(self):
+        mat = self.graph(**self.kwargs)
         return connected_components(mat, directed=False, return_labels=True)
+
+
+class BinaryJoinOperator(JoinOperator):
+    op: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]
+    df1: pd.DataFrame
+    df2: pd.DataFrame
+
+    def __init__(self, op, df1, df2, by="chrom", **kwargs):
+        self.op = op
+        self.df1 = df1
+        self.df2 = df2
+        self.grouper = by
+        self.kwargs = kwargs
+
+    def _tables(self):
+        return self.df1, self.df2
+
+    def _inner(self):
+        starts1 = self.df1["start"].to_numpy()
+        ends1 = self.df1["end"].to_numpy()
+        starts2 = self.df2["start"].to_numpy()
+        ends2 = self.df2["end"].to_numpy()
+
+        df1_groups = self.df1.groupby(
+            self.grouper, observed=True, dropna=False, sort=False
+        ).indices
+        df2_groups = self.df2.groupby(
+            self.grouper, observed=True, dropna=False, sort=False
+        ).indices
+        group_keys = set.union(set(df1_groups.keys()), set(df2_groups.keys()))
+
+        events1 = []
+        events2 = []
+        for key in group_keys:
+            df1_inds = df1_groups.get(key, np.array([]))
+            df2_inds = df2_groups.get(key, np.array([]))
+
+            if len(df1_inds) > 0 and len(df2_inds) > 0:
+                ev1, ev2, *_ = self.op(
+                    starts1[df1_inds],
+                    ends1[df1_inds],
+                    starts2[df2_inds],
+                    ends2[df2_inds],
+                    **self.kwargs
+                )
+                events1.append(df1_inds[ev1])
+                events2.append(df2_inds[ev2])
+
+        events1 = np.concatenate(events1)
+        events2 = np.concatenate(events2)
+
+        return events1, events2
+
+
+class UnaryJoinOperator(JoinOperator):
+    op: Optional[Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]]
+    df: pd.DataFrame
+
+    def __init__(self, op, df, by="chrom", **kwargs):
+        self.op = op
+        self.df = df
+        self.grouper = by
+        self.kwargs = kwargs
+
+    def _tables(self):
+        return self.df, self.df
+
+    def _inner(self):
+        df = self.df
+        starts = df["start"].to_numpy()
+        ends = df["end"].to_numpy()
+
+        groups = df.groupby(
+            self.grouper, observed=True, dropna=False, sort=False
+        ).indices
+
+        events1 = []
+        events2 = []
+        group_keys = set(groups.keys())
+        for key in group_keys:
+            inds = groups.get(key, np.array([]))
+
+            if len(inds) > 0:
+                ev1, ev2, *_ = self.op(
+                    starts[inds],
+                    ends[inds],
+                    **self.kwargs
+                )
+                events1.append(inds[ev1])
+                events2.append(inds[ev2])
+
+        events1 = np.concatenate(events1)
+        events2 = np.concatenate(events2)
+
+        return events1, events2

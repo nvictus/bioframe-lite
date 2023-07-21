@@ -1,18 +1,71 @@
 import numpy as np
 import pandas as pd
 
-from bioframe_lite._join import JoinOperator
+from bioframe_lite._join import UnaryJoinOperator, BinaryJoinOperator
 from bioframe_lite import _ops
 
 
-def overlap(df1, df2=None, by=None, how="inner", suffixes=("", "_"), **kwargs):
-    operator = JoinOperator(_ops.overlap, _ops.overlap_self)
-    return operator.join(df1, df2, by=by, how=how, suffixes=suffixes, **kwargs)
+def overlap(
+    df1,
+    df2=None,
+    by=None,
+    how="inner",
+    suffixes=("", "_"),
+    **kwargs
+):
+    keys = ["chrom"]
+    if by is not None:
+        if isinstance(by, str):
+            by = [by]
+        keys += by
+    if df2 is None:
+        operator = UnaryJoinOperator(_ops.overlap_self, df1, keys, **kwargs)
+        return operator.join(how=how, suffixes=suffixes)
+    else:
+        operator = BinaryJoinOperator(_ops.overlap, df1, df2, keys, **kwargs)
+        return operator.join(how=how, suffixes=suffixes)
 
 
-def closest(df1, df2=None, by=None, how="left", suffixes=("", "_"), **kwargs):
-    operator = JoinOperator(_ops.closest_nooverlap, _ops.closest_nooverlap_self)
-    return operator.join(df1, df2, by=by, how=how, suffixes=suffixes, **kwargs)
+def within(
+    df1,
+    df2=None,
+    by=None,
+    how="inner",
+    suffixes=("", "_"),
+    **kwargs
+):
+    keys = ["chrom"]
+    if by is not None:
+        if isinstance(by, str):
+            by = [by]
+        keys += by
+    if df2 is None:
+        operator = UnaryJoinOperator(_ops.within_self, df1, keys, **kwargs)
+        return operator.join(how=how, suffixes=suffixes)
+    else:
+        operator = BinaryJoinOperator(_ops.within, df1, df2, keys, **kwargs)
+        return operator.join(how=how, suffixes=suffixes)
+
+
+def closest(
+    df1,
+    df2=None,
+    by=None,
+    how="left",
+    suffixes=("", "_"),
+    **kwargs
+):
+    keys = ["chrom"]
+    if by is not None:
+        if isinstance(by, str):
+            by = [by]
+        keys += by
+    if df2 is None:
+        operator = UnaryJoinOperator(_ops.closest_self, df1, keys, **kwargs)
+        return operator.join(how=how, suffixes=suffixes)
+    else:
+        operator = BinaryJoinOperator(_ops.closest, df1, df2, keys, **kwargs)
+        return operator.join(how=how, suffixes=suffixes)
 
 
 def cluster(df, by=None, within=0, closed=True):

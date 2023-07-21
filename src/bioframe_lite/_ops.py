@@ -8,6 +8,17 @@ import numpy as np
 from bioframe_lite._compat.typing import Literal
 
 
+__all__ = [
+    "overlap_self",
+    "overlap",
+    "within_self",
+    "within",
+    "cluster",
+    "closest_self",
+    "closest",
+]
+
+
 def aranges_flat(
     starts: Union[int, np.ndarray],
     stops: Optional[np.ndarray] = None,
@@ -233,13 +244,105 @@ def overlap(
     return events1, events2
 
 
+def within_self(
+    starts: np.ndarray,
+    ends: np.ndarray,
+    radius: int | tuple[int, int] = 0,
+    closed: bool = True,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Return indices of pairs of in proximity between two sets.
+
+    Parameters
+    ----------
+    starts, ends : numpy.ndarray
+        Interval coordinates.
+
+    radius : int, ndarray, or pair of either [default=0]
+        Search radii. If a pair, the first value is the radius to the
+        left and the second value is the radius to the right. If a single
+        value, the radius is applied symmetrically left and right.
+
+    closed : bool, optional [default=True]
+        If True, treat the search radius as closed-ended, allowing
+        capture of intervals that abut the search interval.
+
+    Returns
+    -------
+    events1, events2 : numpy.ndarray
+        Join events, i.e. the indices of all pairs of overlapping intervals.
+    """
+    # Since both query and target intervals extend a search window, we cut it in
+    # half to get the correct maximum separation distance. It doesn't matter
+    # which way we extend the search window in this case as long as the total
+    # amount is half the desired distance, so we just extend the ends.
+
+    if isinstance(radius, tuple):
+        left, right = radius
+    else:
+        left = right = radius
+
+    return overlap_self(
+        starts,
+        ends + (left + right) / 2,
+        closed,
+    )
+
+
+def within(
+    starts1: np.ndarray,
+    ends1: np.ndarray,
+    starts2: np.ndarray,
+    ends2: np.ndarray,
+    radius: int | tuple[int, int] = 0,
+    closed: bool = True,
+    sort: bool = True,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Return indices of pairs of in proximity between two sets.
+
+    Parameters
+    ----------
+    starts1, ends1, starts2, ends2 : numpy.ndarray
+        Interval coordinates.
+
+    radius : int, ndarray, or pair of either [default=0]
+        Search radii. If a pair, the first value is the radius to the
+        left and the second value is the radius to the right. If a single
+        value, the radius is applied symmetrically left and right.
+
+    closed : bool, optional [default=True]
+        If True, treat the search radius as closed-ended, allowing
+        capture of intervals that abut the search interval.
+
+    Returns
+    -------
+    events1, events2 : numpy.ndarray
+        Join events, i.e. the indices of all pairs of overlapping intervals.
+    """
+
+    if isinstance(radius, tuple):
+        left, right = radius
+    else:
+        left = right = radius
+
+    return overlap(
+        starts1 - left,
+        ends1 + right,
+        starts2,
+        ends2,
+        closed,
+        sort
+    )
+
+
 def cluster(
     starts: np.ndarray,
     ends: np.ndarray,
     closed: bool = True,
 ) -> np.ndarray:
     """
-    Cluster intervals by overlap.
+    Cluster overlapping or abutting intervals.
 
     Parameters
     ----------
@@ -358,10 +461,11 @@ def _prune_closest(
     return ids1, ids2, dists
 
 
-def closest_nooverlap_self(
+def closest_self(
     starts: np.ndarray,
     ends: np.ndarray,
     k: int = 1,
+    include_overlaps: bool = False,
     direction: Literal["left", "right"] = None,
     tie_arr: np.ndarray = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -393,21 +497,64 @@ def closest_nooverlap_self(
         Distances between the intervals.
 
     """
-    # We can just use closest_nooverlap. There won't be any self-matches
-    # to remove because the output pairs are non-overlapping.
-    # Closest is not commutative. Unlike overlap, we treat pairs (a, b) and
-    # (b, a) as distinct events.
-    return closest_nooverlap(
-        starts, ends, starts, ends, k, direction, tie_arr
-    )
+    # Non-overlapping closest is not commutative. Unlike overlap, we treat
+    # pairs (a, b) and (b, a) as distinct events. We can therefore reuse
+    # the closest_nonoverlap search functions, but we still need to special
+    # case the overlap self-join.
+    if direction is None:
+        direction = "both"
+
+    if direction not in {"left", "right", "both"}:
+        raise ValueError("direction must be one of 'left', 'right', 'both'")
+
+    ids1 = []
+    ids2 = []
+    dists = []
+
+    if include_overlaps:
+        ids1_over, ids2_over = overlap_self(
+            starts, ends, closed=False,
+        )
+        ids1.append(ids1_over)
+        ids2.append(ids2_over)
+        dists.append(np.zeros_like(ids1_over))
+
+    if direction in {"left", "both"}:
+        ids1_left, ids2_left = _closest_nooverlap_left(
+            starts, ends, starts, ends, k=k, tie_arr=tie_arr
+        )
+        ids1.append(ids1_left)
+        ids2.append(ids2_left)
+        dists.append(starts[ids1_left] - ends[ids2_left])
+
+    if direction in {"right", "both"}:
+        ids1_right, ids2_right = _closest_nooverlap_right(
+            starts, ends, starts, ends, k=k, tie_arr=tie_arr
+        )
+        ids1.append(ids1_right)
+        ids2.append(ids2_right)
+        dists.append(starts[ids2_right] - ends[ids1_right])
+
+    ids1 = np.concatenate(ids1)
+    ids2 = np.concatenate(ids2)
+    dists = np.concatenate(dists)
+
+    # If searching in both directions, filter the excess nearest neighbors.
+    if include_overlaps or direction == "both":
+        ids1, ids2, dists = _prune_closest(
+            ids1, ids2, dists, k=k, tie_arr=tie_arr
+        )
+
+    return ids1, ids2, dists
 
 
-def closest_nooverlap(
+def closest(
     starts1: np.ndarray,
     ends1: np.ndarray,
     starts2: np.ndarray,
     ends2: np.ndarray,
     k: int = 1,
+    include_overlaps: bool = False,
     direction: Literal["left", "right"] = None,
     tie_arr: np.ndarray = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -449,6 +596,14 @@ def closest_nooverlap(
     ids2 = []
     dists = []
 
+    if include_overlaps:
+        ids1_over, ids2_over = overlap(
+            starts1, ends1, starts2, ends2, closed=False, sort=False
+        )
+        ids1.append(ids1_over)
+        ids2.append(ids2_over)
+        dists.append(np.zeros_like(ids1_over))
+
     if direction in {"left", "both"}:
         ids1_left, ids2_left = _closest_nooverlap_left(
             starts1, ends1, starts2, ends2, k=k, tie_arr=tie_arr
@@ -470,7 +625,7 @@ def closest_nooverlap(
     dists = np.concatenate(dists)
 
     # If searching in both directions, filter the excess nearest neighbors.
-    if direction == "both":
+    if include_overlaps or direction == "both":
         ids1, ids2, dists = _prune_closest(
             ids1, ids2, dists, k=k, tie_arr=tie_arr
         )
