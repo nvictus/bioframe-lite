@@ -1,6 +1,7 @@
 """
 Core interval join operations on arrays of interval coordinates.
 """
+from __future__ import annotations
 from typing import Any, Tuple, Union, Optional
 
 import numpy as np

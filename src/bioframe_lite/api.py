@@ -1,8 +1,15 @@
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 
 from bioframe_lite._join import UnaryJoinOperator, BinaryJoinOperator
 from bioframe_lite import _ops
+
+
+# return_input=True,
+# return_index=False,
+# return_overlap=False,
+# keep_order=None,
 
 
 def overlap(
