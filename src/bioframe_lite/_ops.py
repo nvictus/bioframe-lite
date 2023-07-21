@@ -4,9 +4,14 @@ Core interval join operations on arrays of interval coordinates.
 from __future__ import annotations
 from typing import Any, Tuple, Union, Optional
 
-import numpy as np
+import sys
 
-from bioframe_lite._compat.typing import Literal
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
+import numpy as np
 
 
 __all__ = [
