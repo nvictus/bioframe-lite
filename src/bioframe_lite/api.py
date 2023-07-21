@@ -122,3 +122,50 @@ def cluster(df, by=None, within=0, closed=True):
     labels_[indices] = np.concatenate(labels)
 
     return pd.Series(index=df.index, data=labels_, name="cluster")
+
+
+def hull(df, by, agg=None):
+    """
+    Return the convex hulls of intervals sharing a common key.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A table of intervals.
+
+    by : str or list[str]
+        The name of the column(s) containing the key.
+
+    agg : dict, optional [default: None]
+        A dictionary of additional column names and aggregation functions to
+        apply to each run. Takes the format:
+            {'agg_name': ('column_name', 'agg_func')}
+
+    Returns
+    -------
+    pandas.DataFrame
+    """
+    ck, sk, ek = "chrom", "start", "end"
+
+    keys = ["chrom"]
+    if by is not None:
+        if isinstance(by, str):
+            by = [by]
+        keys += by
+
+    if agg is None:
+        agg = {}
+
+    df_merged = (
+        df
+        .groupby(keys)
+        .agg(**{
+            ck: (ck, 'first'),
+            sk: (sk, 'min'),
+            ek: (ek, 'max'),
+            by: (by, 'first'),
+            **agg
+         })
+    )
+
+    return df_merged.reset_index(drop=True)
