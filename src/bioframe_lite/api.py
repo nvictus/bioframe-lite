@@ -163,7 +163,7 @@ def hull(df, by, agg=None):
             ck: (ck, 'first'),
             sk: (sk, 'min'),
             ek: (ek, 'max'),
-            by: (by, 'first'),
+            by[0]: (by[0], 'first'),
             **agg
          })
     )

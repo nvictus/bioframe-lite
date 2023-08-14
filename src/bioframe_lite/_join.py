@@ -164,12 +164,14 @@ class JoinOperator:
         ).convert_dtypes()
 
     def graph(self, kind="biadj"):
-        i, j, *_ = self.inner(**self.kwargs)
+        i, j, *_ = self._inner(**self.kwargs)
+
+        df1, df2 = self._tables()
 
         if kind == "biadj":
-            return join_graph_biadj(i, j, self.df1.shape[0], self.df2.shape[0])
+            return join_graph_biadj(i, j, df1.shape[0], df2.shape[0])
         elif kind == "adj":
-            return join_graph_adj(i, j, self.df1.shape[0], self.df2.shape[0])
+            return join_graph_adj(i, j, df1.shape[0], df2.shape[0])
         else:
             raise ValueError(f"Unrecognized kind: {kind}")
 
